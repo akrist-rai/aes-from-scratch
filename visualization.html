@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AES from Scratch — Interactive Visualization</title>
+<style>
+:root {
+  --bg:     #0d1117;
+  --bg2:    #161b22;
+  --bg3:    #21262d;
+  --border: #30363d;
+  --text:   #e6edf3;
+  --muted:  #8b949e;
+  --cyan:   #22d3ee;
+  --purple: #a78bfa;
+  --green:  #4ade80;
+  --yellow: #fbbf24;
+  --red:    #f87171;
+  --orange: #fb923c;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.65}
+
+/* ── Navigation ────────────────────────────────── */
+nav{
+  position:fixed;top:0;width:100%;
+  background:rgba(13,17,23,.96);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);z-index:999;
+  display:flex;gap:1.25rem;padding:.65rem 2rem;overflow-x:auto;
+}
+nav a{color:var(--muted);text-decoration:none;font-size:.82rem;white-space:nowrap;transition:color .15s}
+nav a:hover{color:var(--cyan)}
+nav .logo{color:var(--cyan);font-weight:700;font-size:.9rem;margin-right:.5rem}
+
+/* ── Layout ────────────────────────────────────── */
+main{max-width:1060px;margin:0 auto;padding:4.5rem 1.5rem 5rem}
+section{padding:3.5rem 0;border-bottom:1px solid var(--border)}
+section:last-child{border-bottom:none}
+
+/* ── Typography ────────────────────────────────── */
+h1{font-size:2.6rem;line-height:1.2;color:var(--cyan);margin-bottom:.4rem}
+h2{font-size:1.6rem;color:var(--text);margin-bottom:1.5rem;padding-left:1rem;border-left:3px solid var(--cyan)}
+h3{font-size:1.15rem;color:var(--cyan);margin:1.75rem 0 .6rem}
+h4{font-size:1rem;color:var(--purple);margin:.75rem 0 .4rem}
+p{margin-bottom:.85rem;color:var(--text)}
+ul{margin:.5rem 0 .85rem 1.5rem}
+li{margin-bottom:.3rem}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Code ──────────────────────────────────────── */
+code{font-family:'JetBrains Mono','Fira Code','Cascadia Code',monospace;font-size:.85rem;color:var(--green);background:var(--bg3);padding:.15em .4em;border-radius:4px}
+pre.block{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.25rem;overflow-x:auto;margin:.75rem 0}
+pre.block code{background:none;padding:0;font-size:.82rem;line-height:1.7;white-space:pre}
+.kw{color:#ff7b72}.fn{color:#d2a8ff}.str{color:#a5d6ff}.num{color:#79c0ff}.cmt{color:var(--muted);font-style:italic}.tp{color:#ffa657}
+
+/* ── Cards & Boxes ─────────────────────────────── */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1.25rem}
+.info{background:rgba(34,211,238,.05);border:1px solid rgba(34,211,238,.25);border-radius:8px;padding:1rem 1.25rem;margin:.75rem 0}
+.warn{background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.25);border-radius:8px;padding:1rem 1.25rem;margin:.75rem 0;color:var(--yellow)}
+.danger{background:rgba(248,113,113,.05);border:1px solid rgba(248,113,113,.25);border-radius:8px;padding:1rem 1.25rem;margin:.75rem 0;color:var(--red)}
+.badge{display:inline-block;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:600}
+.bc{background:rgba(34,211,238,.15);color:var(--cyan)}
+.bp{background:rgba(167,139,250,.15);color:var(--purple)}
+.bg{background:rgba(74,222,128,.15);color:var(--green)}
+.br{background:rgba(248,113,113,.15);color:var(--red)}
+.by{background:rgba(251,191,36,.15);color:var(--yellow)}
+
+/* ── Grid helpers ──────────────────────────────── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+@media(max-width:700px){.g2,.g3{grid-template-columns:1fr}}
+
+/* ── State Matrix ──────────────────────────────── */
+.state-wrap{display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;margin:1rem 0}
+.state-label{font-size:.75rem;color:var(--muted);text-align:center;margin-bottom:.4rem;font-family:monospace}
+.matrix{display:inline-grid;grid-template-columns:repeat(4,1fr);gap:3px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px}
+.cell{
+  width:50px;height:50px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:monospace;font-weight:700;font-size:.95rem;
+  border-radius:5px;border:1px solid var(--border);
+  background:var(--bg2);color:var(--text);
+  transition:background .35s,border-color .35s,color .35s;
+  cursor:default;position:relative;
+}
+.cell.hi-c{background:rgba(34,211,238,.18);border-color:var(--cyan);color:var(--cyan)}
+.cell.hi-p{background:rgba(167,139,250,.18);border-color:var(--purple);color:var(--purple)}
+.cell.hi-g{background:rgba(74,222,128,.18);border-color:var(--green);color:var(--green)}
+.cell.hi-y{background:rgba(251,191,36,.18);border-color:var(--yellow);color:var(--yellow)}
+
+/* ── S-box grid ─────────────────────────────────── */
+.sbox-container{overflow-x:auto;margin:1rem 0}
+.sbox-grid{display:grid;grid-template-columns:36px repeat(16,1fr);gap:2px;min-width:620px}
+.sc{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  font-family:monospace;font-size:.65rem;font-weight:600;
+  border-radius:3px;background:var(--bg2);border:1px solid var(--border);
+  cursor:pointer;transition:all .12s;color:var(--text);
+}
+.sc:hover:not(.sh){background:rgba(34,211,238,.2);border-color:var(--cyan);color:var(--cyan);transform:scale(1.15);z-index:5;position:relative}
+.sh{background:var(--bg3);color:var(--muted);cursor:default;font-size:.6rem}
+.sc.active{background:rgba(34,211,238,.35);border-color:var(--cyan);color:var(--cyan)}
+
+/* ── Controls ───────────────────────────────────── */
+.controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:.75rem 0}
+button{
+  background:var(--cyan);color:var(--bg);border:none;border-radius:6px;
+  padding:.45rem 1.1rem;font-weight:700;cursor:pointer;font-size:.85rem;
+  transition:opacity .15s;
+}
+button:hover{opacity:.82}
+button.sec{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+button.sec:hover{border-color:var(--cyan);color:var(--cyan)}
+button:disabled{opacity:.35;cursor:default}
+input[type=text]{
+  background:var(--bg3);border:1px solid var(--border);border-radius:6px;
+  color:var(--text);padding:.4rem .7rem;font-family:monospace;font-size:.88rem;
+}
+input[type=text]:focus{outline:none;border-color:var(--cyan)}
+
+/* ── Progress ───────────────────────────────────── */
+.progress{height:4px;background:var(--bg3);border-radius:2px;margin:.4rem 0}
+.pfill{height:100%;background:var(--cyan);border-radius:2px;transition:width .3s}
+.step-info{
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:1rem 1.25rem;border-left:3px solid var(--cyan);margin:.75rem 0;
+}
+.step-title{font-size:.95rem;font-weight:700;color:var(--cyan);margin-bottom:.35rem}
+.step-math{font-family:monospace;font-size:.82rem;color:var(--green);line-height:1.8;white-space:pre-wrap}
+
+/* ── GF Calc ────────────────────────────────────── */
+.gf-calc{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1.5rem;max-width:640px}
+.gf-row{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem}
+.gf-result{font-family:monospace;font-size:.88rem;color:var(--green);line-height:1.8;white-space:pre-wrap;margin-top:.5rem}
+
+/* ── Key Schedule ───────────────────────────────── */
+.ks-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:.75rem 0;font-family:monospace;font-size:.78rem}
+.ks-cell{
+  padding:.45rem .3rem;border-radius:4px;background:var(--bg2);
+  border:1px solid var(--border);text-align:center;color:var(--text);
+  transition:all .3s;
+}
+.ks-cell.ks-orig{background:rgba(74,222,128,.12);border-color:var(--green);color:var(--green)}
+.ks-cell.ks-rot{background:rgba(251,191,36,.12);border-color:var(--yellow);color:var(--yellow)}
+.ks-cell.ks-xor{background:rgba(34,211,238,.12);border-color:var(--cyan);color:var(--cyan)}
+
+/* ── Modes diagrams ─────────────────────────────── */
+.mode-block{
+  font-family:monospace;font-size:.78rem;background:var(--bg2);
+  border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;
+  color:var(--green);white-space:pre;overflow-x:auto;line-height:1.7;
+}
+
+/* ── Table ──────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.88rem}
+th{background:var(--bg3);color:var(--muted);padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border)}
+td{padding:.5rem .75rem;border-bottom:1px solid var(--border);font-family:monospace}
+tr:hover td{background:var(--bg2)}
+
+/* ── Scrollbar ──────────────────────────────────── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">⚙ AES</span>
+  <a href="#overview">Overview</a>
+  <a href="#gf-math">GF(2⁸) Math</a>
+  <a href="#sbox">S-Box</a>
+  <a href="#operations">Operations</a>
+  <a href="#key-schedule">Key Schedule</a>
+  <a href="#cipher-trace">Cipher Trace</a>
+  <a href="#modes">Modes</a>
+  <a href="#source">Go Source</a>
+</nav>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════════ OVERVIEW -->
+<section id="overview">
+  <h1>AES — Advanced Encryption Standard</h1>
+  <p style="color:var(--muted);font-size:1.05rem;margin-bottom:2rem">A complete mathematical tour from Galois fields to Go source code</p>
+
+  <div class="g3">
+    <div class="card">
+      <h4>Block Size</h4>
+      <p style="font-size:1.4rem;color:var(--cyan);font-family:monospace;font-weight:700">128 bits</p>
+      <p style="color:var(--muted);font-size:.85rem">Always 16 bytes regardless of key size</p>
+    </div>
+    <div class="card">
+      <h4>Key Sizes</h4>
+      <p><span class="badge bc">AES-128</span> 16 bytes · 10 rounds</p>
+      <p><span class="badge bp">AES-192</span> 24 bytes · 12 rounds</p>
+      <p><span class="badge bg">AES-256</span> 32 bytes · 14 rounds</p>
+    </div>
+    <div class="card">
+      <h4>Security Model</h4>
+      <p>Symmetric <em>block cipher</em> — same key encrypts and decrypts. Adopted as FIPS 197 in 2001. No known practical attack against the full cipher.</p>
+    </div>
+  </div>
+
+  <h3>Architecture: SP-Network</h3>
+  <p>AES is a <strong>Substitution-Permutation Network (SPN)</strong>. Each round applies four invertible operations to a 4×4 byte <em>state matrix</em>. The alternation of non-linear (SubBytes) and linear (ShiftRows, MixColumns) operations achieves both <em>confusion</em> and <em>diffusion</em>.</p>
+
+  <div class="mode-block" id="arch-diagram">AES-128 Encryption Flow (10 rounds):
+
+  Plaintext (128 bits)
+        │
+  ┌─────▼──────────────────┐
+  │  AddRoundKey(key[0])   │  ← initial key whitening
+  └─────┬──────────────────┘
+        │   ┌────────────────────────────────────────────┐
+        │   │          Rounds 1 – 9 (full round)         │
+        │   │                                            │
+        │   │   ┌──────────┐  ┌──────────┐              │
+        │   ├──►│ SubBytes │─►│ShiftRows │─┐            │
+        │   │   └──────────┘  └──────────┘ │            │
+        │   │   ┌────────────┐ ┌──────────┐│            │
+        │   │   │ MixColumns │◄┘AddRndKey ├┘            │
+        │   │   └──────┬─────┘ └──────────┘             │
+        │   │          │  (repeat 9 times)               │
+        │   └──────────┼────────────────────────────────-┘
+        │              │
+        │   ┌──────────▼────────────────────────────┐
+        │   │  Final Round (no MixColumns)           │
+        │   │  SubBytes → ShiftRows → AddRoundKey    │
+        │   └──────────────────────────┬────────────┘
+        │                              │
+        └──────────────────────────────▼
+                  Ciphertext (128 bits)</div>
+
+  <h3>The State Matrix</h3>
+  <p>AES loads 16 bytes into a <strong>4×4 matrix</strong> in <em>column-major</em> order. Each row/column operation addresses bytes across the full block simultaneously.</p>
+
+  <div class="state-wrap">
+    <div>
+      <div class="state-label">Input bytes (hex)</div>
+      <div class="matrix" id="state-intro">
+        <!-- filled by JS -->
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;justify-content:center;font-family:monospace;font-size:.8rem;color:var(--muted);gap:.3rem">
+      <div>Byte 0 → State[0][0]</div>
+      <div>Byte 1 → State[1][0]</div>
+      <div>Byte 4 → State[0][1]</div>
+      <div>Byte 15 → State[3][3]</div>
+      <div style="margin-top:.5rem">state[row][col] = bytes[col*4 + row]</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ GF(2^8) MATH -->
+<section id="gf-math">
+  <h2>GF(2⁸) — Galois Field Arithmetic</h2>
+
+  <p>AES arithmetic lives entirely inside <strong>GF(2⁸)</strong>, the finite field with 256 elements. Understanding this field is the key to understanding why AES works the way it does.</p>
+
+  <h3>Field Elements as Polynomials</h3>
+  <p>Each byte <code>b</code> represents a polynomial of degree ≤ 7 over GF(2) (coefficients are 0 or 1):</p>
+
+  <div class="info">
+    <code>b = b₇x⁷ + b₆x⁶ + b₅x⁵ + b₄x⁴ + b₃x³ + b₂x² + b₁x + b₀</code><br><br>
+    Example: <code>0x57</code> = <code>0101 0111₂</code> = <em>x⁶ + x⁴ + x² + x + 1</em>
+  </div>
+
+  <div class="g2">
+    <div>
+      <h4>Addition = XOR</h4>
+      <p>Polynomial addition mod 2 is simply XOR — each coefficient is added mod 2, so carries never propagate:</p>
+      <pre class="block"><code><span class="cmt">// (x⁶+x⁴+x²+x+1) + (x⁷+x+1)</span>
+<span class="num">0x57</span> ^ <span class="num">0x83</span> = <span class="num">0xD4</span>
+
+<span class="cmt">// Bit-by-bit:</span>
+0101 0111
+1000 0011
+─────────  XOR
+1101 0100  = 0xD4</code></pre>
+    </div>
+    <div>
+      <h4>Subtraction = XOR (same as addition!)</h4>
+      <p>In GF(2), <code>−1 ≡ 1</code>, so subtraction and addition are identical. This is a critical simplification that makes AES hardware-friendly.</p>
+      <div class="info" style="font-size:.85rem">
+        <code>a + a = 0</code> for all <code>a</code> in GF(2⁸)<br>
+        Every element is its own additive inverse
+      </div>
+    </div>
+  </div>
+
+  <h3>The Reduction Polynomial</h3>
+  <p>Multiplying two degree-7 polynomials can yield degree up to 14. We reduce modulo an <em>irreducible polynomial</em> to stay within 8 bits. AES uses:</p>
+
+  <div class="info" style="text-align:center;font-size:1.05rem">
+    <strong>p(x) = x⁸ + x⁴ + x³ + x + 1 = 0x11B</strong><br>
+    <span style="color:var(--muted);font-size:.85rem">This polynomial has no factors over GF(2) — it's irreducible, making GF(2⁸) a field</span>
+  </div>
+
+  <p>When multiplication produces x⁸, we substitute <code>x⁸ ≡ x⁴ + x³ + x + 1</code> (from <code>p(x) = 0 mod p(x)</code>). This is the <code>0x1B</code> XOR constant you see in the code.</p>
+
+  <h3>xtime — Multiply by x (i.e., by 2)</h3>
+  <p>The fundamental GF(2⁸) operation. Shifting left multiplies a polynomial by <code>x</code>. If the degree would exceed 7, reduce by XOR'ing with <code>0x1B</code> (the low 8 bits of the reduction polynomial, since x⁸ ≡ x⁴+x³+x+1 = 0x1B):</p>
+
+  <pre class="block"><code><span class="kw">func</span> <span class="fn">xtime</span>(b <span class="tp">byte</span>) <span class="tp">byte</span> {
+    <span class="kw">if</span> b&<span class="num">0x80</span> != <span class="num">0</span> {          <span class="cmt">// bit 7 is set → degree would become 8</span>
+        <span class="kw">return</span> (b &lt;&lt; <span class="num">1</span>) ^ <span class="num">0x1b</span>  <span class="cmt">// shift left, reduce mod p(x)</span>
+    }
+    <span class="kw">return</span> b &lt;&lt; <span class="num">1</span>              <span class="cmt">// no overflow, just shift</span>
+}</code></pre>
+
+  <h3>gmul — General Multiplication (Russian Peasant Algorithm)</h3>
+  <p>Any multiplication can be decomposed using repeated doubling. For <code>gmul(a, b)</code>, we accumulate <code>a</code> shifted by each set bit position of <code>b</code>:</p>
+
+  <pre class="block"><code><span class="kw">func</span> <span class="fn">gmul</span>(a, b <span class="tp">byte</span>) <span class="tp">byte</span> {
+    <span class="kw">var</span> p <span class="tp">byte</span>
+    <span class="kw">for</span> i := <span class="num">0</span>; i &lt; <span class="num">8</span>; i++ {
+        <span class="kw">if</span> b&<span class="num">1</span> != <span class="num">0</span> { p ^= a }  <span class="cmt">// if bit i of b is set, XOR in a·xⁱ</span>
+        a = <span class="fn">xtime</span>(a)           <span class="cmt">// a ← a·x (multiply by x)</span>
+        b &gt;&gt;= <span class="num">1</span>                <span class="cmt">// move to next bit</span>
+    }
+    <span class="kw">return</span> p
+}</code></pre>
+
+  <div class="info">
+    <strong>Worked example:</strong> <code>gmul(0x57, 0x13)</code><br>
+    <code>0x13 = 0001 0011₂</code> — bits 0, 1, 4 are set<br>
+    <code>0x57·x⁰ = 0x57</code><br>
+    <code>0x57·x¹ = xtime(0x57) = 0xAE</code><br>
+    <code>0x57·x⁴ = xtime⁴(0x57) = 0x07</code><br>
+    Result: <code>0x57 ⊕ 0xAE ⊕ 0x07 = 0xFE</code>
+  </div>
+
+  <h3>Interactive GF(2⁸) Calculator</h3>
+  <div class="gf-calc">
+    <div class="gf-row">
+      <span>gmul(</span>
+      <input type="text" id="gf-a" value="57" maxlength="2" style="width:60px">
+      <span>,</span>
+      <input type="text" id="gf-b" value="13" maxlength="2" style="width:60px">
+      <span>) =</span>
+      <button onclick="calcGmul()">Compute</button>
+    </div>
+    <div id="gf-out" class="gf-result"></div>
+  </div>
+
+  <h3>Powers of {02} in GF(2⁸)</h3>
+  <p>The element <code>02</code> generates the multiplicative group of GF(2⁸). Its powers cycle through all 255 nonzero elements:</p>
+  <div id="powers-table"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ S-BOX -->
+<section id="sbox">
+  <h2>The S-Box — Non-Linear Substitution</h2>
+
+  <p>The S-box is a bijective mapping from each of the 256 possible byte values to a new byte value. It's the <em>only non-linear</em> component of AES and provides all resistance to linear and differential cryptanalysis.</p>
+
+  <h3>Construction (Two-Step Process)</h3>
+  <div class="g2">
+    <div>
+      <h4>Step 1: Multiplicative Inverse in GF(2⁸)</h4>
+      <p>For each byte <code>a</code>, compute <code>a⁻¹</code> such that <code>a · a⁻¹ = 1 mod p(x)</code>.</p>
+      <p>Special case: <code>0⁻¹ = 0</code> (0 has no inverse; this is the one arbitrary choice).</p>
+      <div class="info" style="font-size:.82rem">
+        Example: <code>0x53 → 0xCA</code> because <code>gmul(0x53, 0xCA) = 0x01</code>
+      </div>
+    </div>
+    <div>
+      <h4>Step 2: Affine Transform Over GF(2)</h4>
+      <p>Each bit of the result is computed from 5 bits of the inverse using this matrix equation:</p>
+      <pre class="block" style="font-size:.75rem"><code>b = M · a⁻¹ ⊕ c
+
+M = [1 0 0 0 1 1 1 1]   c = 0110 0011
+    [1 1 0 0 0 1 1 1]       = 0x63
+    [1 1 1 0 0 0 1 1]
+    [1 1 1 1 0 0 0 1]
+    [1 1 1 1 1 0 0 0]
+    [0 1 1 1 1 1 0 0]
+    [0 0 1 1 1 1 1 0]
+    [0 0 0 1 1 1 1 1]</code></pre>
+    </div>
+  </div>
+
+  <p>Bit-by-bit formula for each output bit <em>i</em>:</p>
+  <div class="info">
+    <code>bᵢ = aᵢ ⊕ a₍ᵢ₊₄₎₈ ⊕ a₍ᵢ₊₅₎₈ ⊕ a₍ᵢ₊₆₎₈ ⊕ a₍ᵢ₊₇₎₈ ⊕ cᵢ</code><br>
+    <span style="color:var(--muted);font-size:.82rem">where subscript 8 means mod 8, and c = 0x63</span>
+  </div>
+
+  <p>The constant 0x63 and the specific matrix were chosen to give the S-box <em>maximum algebraic complexity</em> — the Boolean function of each output bit cannot be expressed simply in terms of the input bits.</p>
+
+  <h3>Interactive S-Box Lookup Table</h3>
+  <p style="color:var(--muted);font-size:.85rem">Click any cell to see its row×col index and the substituted value. Row = high nibble, Col = low nibble of the input byte.</p>
+  <div class="sbox-container">
+    <div class="sbox-grid" id="sbox-grid"></div>
+  </div>
+  <div id="sbox-detail" class="info" style="display:none"></div>
+
+  <h3>Key Properties</h3>
+  <div class="g3">
+    <div class="card">
+      <h4>Non-linearity</h4>
+      <p>The S-box has non-linearity of 112 (maximum possible for 8×8 bijection), making it maximally resistant to linear cryptanalysis.</p>
+    </div>
+    <div class="card">
+      <h4>Differential uniformity</h4>
+      <p>Maximum output difference for any non-zero input difference is 4, providing strong resistance to differential cryptanalysis.</p>
+    </div>
+    <div class="card">
+      <h4>Fixed points</h4>
+      <p>S-box(0x00) = 0x63 (not 0x00), eliminating the trivial fixed point. No byte maps to itself.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ OPERATIONS -->
+<section id="operations">
+  <h2>The Four Round Operations</h2>
+
+  <h3>1. AddRoundKey</h3>
+  <p>XOR each state byte with the corresponding byte from the current round key. This is the only operation that involves the key.</p>
+  <pre class="block"><code>state[row][col] ^= roundKey[col][row]   <span class="cmt">// Note: column-indexed key words</span></code></pre>
+  <p>Because XOR is its own inverse, <em>AddRoundKey is identical in encryption and decryption</em> — just XOR again with the same key.</p>
+
+  <h3>2. SubBytes / InvSubBytes</h3>
+  <p>Replace every byte in the state with its S-box value. Each byte is processed <em>independently</em>, providing non-linearity and confusion.</p>
+  <pre class="block"><code><span class="kw">func</span> <span class="fn">subBytes</span>(s <span class="tp">state</span>) <span class="tp">state</span> {
+    <span class="kw">for</span> row := <span class="num">0</span>; row &lt; <span class="num">4</span>; row++ {
+        <span class="kw">for</span> col := <span class="num">0</span>; col &lt; <span class="num">4</span>; col++ {
+            s[row][col] = sbox[s[row][col]]
+        }
+    }
+    <span class="kw">return</span> s
+}</code></pre>
+
+  <div class="g2">
+    <div>
+      <div class="state-label">Before SubBytes</div>
+      <div class="matrix" id="ops-before-sb"></div>
+    </div>
+    <div>
+      <div class="state-label">After SubBytes (S-box applied)</div>
+      <div class="matrix" id="ops-after-sb"></div>
+    </div>
+  </div>
+
+  <h3>3. ShiftRows / InvShiftRows</h3>
+  <p>Each row <em>i</em> is cyclically rotated left by <em>i</em> positions. This moves bytes to different columns, ensuring that after MixColumns, each column's output depends on bytes from <em>all four columns</em> of the input (the <strong>Wide Trail strategy</strong>).</p>
+  <pre class="block"><code><span class="cmt">// Row 0: shift 0  →  [a, b, c, d] → [a, b, c, d]</span>
+<span class="cmt">// Row 1: shift 1  →  [e, f, g, h] → [f, g, h, e]</span>
+<span class="cmt">// Row 2: shift 2  →  [i, j, k, l] → [k, l, i, j]</span>
+<span class="cmt">// Row 3: shift 3  →  [m, n, o, p] → [p, m, n, o]  (shift 3 left = shift 1 right)</span>
+
+s[1][0], s[1][1], s[1][2], s[1][3] = s[1][1], s[1][2], s[1][3], s[1][0]
+s[2][0], s[2][1], s[2][2], s[2][3] = s[2][2], s[2][3], s[2][0], s[2][1]
+s[3][0], s[3][1], s[3][2], s[3][3] = s[3][3], s[3][0], s[3][1], s[3][2]</code></pre>
+
+  <div id="shiftrows-demo" style="margin:1rem 0"></div>
+
+  <h3>4. MixColumns / InvMixColumns</h3>
+  <p>Each column is treated as a 4-term polynomial over GF(2⁸) and multiplied by the fixed polynomial <code>a(x) = {03}x³ + {01}x² + {01}x + {02}</code>. This is equivalent to matrix multiplication:</p>
+
+  <pre class="block"><code><span class="cmt">// Matrix form (all arithmetic in GF(2⁸)):</span>
+⎡ s'₀ ⎤   ⎡ 2  3  1  1 ⎤   ⎡ s₀ ⎤
+⎢ s'₁ ⎥ = ⎢ 1  2  3  1 ⎥ × ⎢ s₁ ⎥
+⎢ s'₂ ⎥   ⎢ 1  1  2  3 ⎥   ⎢ s₂ ⎥
+⎣ s'₃ ⎦   ⎣ 3  1  1  2 ⎦   ⎣ s₃ ⎦
+
+<span class="cmt">// Where 2 = xtime(a), 3 = xtime(a)^a (in GF(2⁸))</span>
+s'₀ = gmul(2,s₀) ^ gmul(3,s₁) ^ s₂         ^ s₃
+s'₁ = s₀         ^ gmul(2,s₁) ^ gmul(3,s₂)  ^ s₃
+s'₂ = s₀         ^ s₁         ^ gmul(2,s₂)  ^ gmul(3,s₃)
+s'₃ = gmul(3,s₀) ^ s₁         ^ s₂          ^ gmul(2,s₃)</code></pre>
+
+  <p>The matrix is a <em>circulant MDS matrix</em>. MDS (Maximum Distance Separable) means: if 1 input byte changes, <em>all 4 output bytes change</em>. This is perfect diffusion within a column.</p>
+
+  <div class="info">
+    <strong>Why these constants?</strong> The circulant matrix built from <code>[2, 3, 1, 1]</code> satisfies the MDS property over GF(2⁸). The constants 2 and 3 allow implementations using only xtime and XOR — no table lookups needed for hardware.
+  </div>
+
+  <h4>MixColumns Worked Example</h4>
+  <p>Column = <code>[d4, e0, b8, 1e]</code> from FIPS 197 Appendix B, Round 1:</p>
+  <div id="mixcol-worked"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ KEY SCHEDULE -->
+<section id="key-schedule">
+  <h2>Key Expansion (Key Schedule)</h2>
+
+  <p>The single user key is expanded into <strong>(Nr + 1) round keys</strong>, each 128 bits. AES-128 needs 11 round keys = 44 32-bit words.</p>
+
+  <h3>Algorithm (AES-128, Nk=4)</h3>
+  <pre class="block"><code><span class="cmt">// Input: 16-byte key → 44 words W[0..43]</span>
+
+<span class="cmt">// Seed with original key</span>
+<span class="kw">for</span> i := <span class="num">0</span>; i &lt; Nk; i++ {
+    W[i] = key[4i : 4i+4]
+}
+
+<span class="kw">for</span> i := Nk; i &lt; <span class="num">44</span>; i++ {
+    temp := W[i-<span class="num">1</span>]
+    <span class="kw">if</span> i%Nk == <span class="num">0</span> {
+        temp = SubWord(RotWord(temp)) ^ Rcon[i/Nk]
+    }
+    W[i] = W[i-Nk] ^ temp
+}
+
+<span class="cmt">// Group into round keys: RoundKey[r] = W[4r .. 4r+3]</span>
+
+<span class="cmt">// RotWord: rotate left by 1 byte</span>
+<span class="cmt">//   [a0,a1,a2,a3] → [a1,a2,a3,a0]</span>
+<span class="cmt">// SubWord: apply S-box to each byte</span>
+<span class="cmt">// Rcon[j]: [2^(j-1), 0, 0, 0] in GF(2⁸)</span></code></pre>
+
+  <p>The Rcon constants ensure that every word in the expanded key depends on the key in a nonlinear way. Rcon[1..10] = <code>[01, 02, 04, 08, 10, 20, 40, 80, 1b, 36]</code> — successive powers of 2 in GF(2⁸).</p>
+
+  <h3>Interactive Key Expansion</h3>
+  <div style="margin:.75rem 0;display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
+    <span style="font-size:.85rem;color:var(--muted)">AES-128 Key (hex):</span>
+    <input type="text" id="ks-key-input" value="2b7e151628aed2a6abf7158809cf4f3c" style="width:340px;font-size:.8rem">
+    <button onclick="renderKeySchedule()">Expand</button>
+  </div>
+  <div class="g2" style="margin:.5rem 0;font-size:.78rem">
+    <div><span class="badge bg">■</span> Original key words</div>
+    <div><span class="badge by">■</span> RotWord + SubWord + Rcon applied</div>
+    <div><span class="badge bc">■</span> Simple XOR with W[i-Nk]</div>
+  </div>
+  <div id="ks-display"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ CIPHER TRACE -->
+<section id="cipher-trace">
+  <h2>Full Cipher Trace — Interactive Stepper</h2>
+  <p>Step through every operation of AES encryption. Loaded with the <strong>FIPS 197 Appendix B test vector</strong>.</p>
+
+  <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem">
+    <div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.3rem">Key (hex, 16/24/32 bytes)</div>
+      <input type="text" id="trace-key" value="2b7e151628aed2a6abf7158809cf4f3c" style="width:350px;font-size:.8rem">
+    </div>
+    <div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:.3rem">Plaintext (hex, 16 bytes)</div>
+      <input type="text" id="trace-pt" value="3243f6a8885a308d313198a2e0370734" style="width:350px;font-size:.8rem">
+    </div>
+    <button onclick="buildTrace()" style="align-self:flex-end">Encrypt</button>
+  </div>
+
+  <div class="progress"><div class="pfill" id="trace-prog" style="width:0%"></div></div>
+  <div class="controls">
+    <button onclick="stepBack()" id="btn-back" class="sec" disabled>◀ Prev</button>
+    <button onclick="stepFwd()" id="btn-fwd">Next ▶</button>
+    <button onclick="stepToEnd()" class="sec">Skip to end</button>
+    <button onclick="resetTrace()" class="sec">↺ Reset</button>
+    <span id="step-counter" style="color:var(--muted);font-size:.85rem"></span>
+  </div>
+
+  <div class="step-info" id="step-info">
+    <div class="step-title" id="step-title">Press "Encrypt" to begin</div>
+    <div class="step-math" id="step-math"></div>
+  </div>
+
+  <div class="state-wrap" id="trace-states"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ MODES -->
+<section id="modes">
+  <h2>Modes of Operation</h2>
+  <p>A block cipher encrypts exactly one 16-byte block. A <em>mode of operation</em> extends it to arbitrary-length messages.</p>
+
+  <div class="g3" style="margin-bottom:1.5rem">
+    <div class="card">
+      <h4><span class="badge br">INSECURE</span> ECB</h4>
+      <p>Electronic Codebook. Each block encrypted independently.</p>
+      <div class="danger">Identical plaintext → identical ciphertext. Pattern leaks. <strong>Never use.</strong></div>
+    </div>
+    <div class="card">
+      <h4><span class="badge bg">✓ CBC</span></h4>
+      <p>Cipher Block Chaining. Blocks are chained via XOR. Needs random IV.</p>
+      <div class="info" style="font-size:.82rem">Errors in Cᵢ corrupt blocks Pᵢ and Pᵢ₊₁. Sequential encryption only.</div>
+    </div>
+    <div class="card">
+      <h4><span class="badge bg">✓ CTR</span></h4>
+      <p>Counter Mode. AES becomes a stream cipher. No padding needed.</p>
+      <div class="info" style="font-size:.82rem">Parallelizable. Random access. <strong>Never reuse nonce+key.</strong></div>
+    </div>
+  </div>
+
+  <h3>ECB — Electronic Codebook</h3>
+  <div class="mode-block">Enc:  C[i] = AES_Enc(K, P[i])
+Dec:  P[i] = AES_Dec(K, C[i])
+
+  ┌───────┐         ┌───────┐         ┌───────┐
+  │  P[0] │         │  P[1] │         │  P[2] │
+  └───┬───┘         └───┬───┘         └───┬───┘
+      │                 │                 │
+  ┌───▼───┐         ┌───▼───┐         ┌───▼───┐
+  │  AES  │K        │  AES  │K        │  AES  │K
+  └───┬───┘         └───┬───┘         └───┬───┘
+      │                 │                 │
+  ┌───▼───┐         ┌───▼───┐         ┌───▼───┐
+  │  C[0] │         │  C[1] │         │  C[2] │
+  └───────┘         └───────┘         └───────┘
+
+  ⚠ If P[0] == P[1] then C[0] == C[1] — structure preserved!</div>
+
+  <h3>CBC — Cipher Block Chaining</h3>
+  <div class="mode-block">Enc:  C[0] = AES_Enc(K, P[0] ⊕ IV)
+      C[i] = AES_Enc(K, P[i] ⊕ C[i-1])
+Dec:  P[i] = AES_Dec(K, C[i]) ⊕ C[i-1]
+
+   IV(random)
+      │
+  ┌───▼───┐
+  │   ⊕   │◄── P[0]      ┌───────┐◄── C[0]     ┌───────┐◄── C[1]
+  └───┬───┘               │   ⊕   │◄── P[1]     │   ⊕   │◄── P[2]
+  ┌───▼───┐               └───┬───┘              └───┬───┘
+  │  AES  │K              ┌───▼───┐             ┌───▼───┐
+  └───┬───┘               │  AES  │K            │  AES  │K
+      ├──────────────────►└───┬───┘             └───┬───┘
+  ┌───▼───┐                   ├────────────────►┌───▼───┐
+  │  C[0] │               ┌───▼───┐             │  C[2] │
+  └───────┘               │  C[1] │             └───────┘
+                          └───────┘
+
+  ✓ IV stored prepended to ciphertext. Must be random, not secret.</div>
+
+  <h3>CTR — Counter Mode</h3>
+  <div class="mode-block">Enc:  C[i] = P[i] ⊕ AES_Enc(K, Nonce ‖ Counter[i])
+Dec:  P[i] = C[i] ⊕ AES_Enc(K, Nonce ‖ Counter[i])
+(Encryption and decryption are identical)
+
+  Nonce‖0       Nonce‖1       Nonce‖2
+  ┌───────┐     ┌───────┐     ┌───────┐
+  │  AES  │K    │  AES  │K    │  AES  │K
+  └───┬───┘     └───┬───┘     └───┬───┘
+      │              │             │
+  ┌───▼───┐     ┌───▼───┐     ┌───▼───┐
+  │   ⊕   │◄P[0]│   ⊕   │◄P[1]│   ⊕   │◄P[2]
+  └───┬───┘     └───┬───┘     └───┬───┘
+  ┌───▼───┐     ┌───▼───┐     ┌───▼───┐
+  │  C[0] │     │  C[1] │     │  C[2] │
+  └───────┘     └───────┘     └───────┘
+
+  ✓ Fully parallelizable. No padding. Nonce stored prepended.
+  ⚠ Reusing nonce+key lets attacker recover P[0] ⊕ P'[0]</div>
+
+  <h3>Security Properties Comparison</h3>
+  <table>
+    <thead><tr><th>Property</th><th>ECB</th><th>CBC</th><th>CTR</th></tr></thead>
+    <tbody>
+      <tr><td>Hides patterns</td><td style="color:var(--red)">✗ No</td><td style="color:var(--green)">✓ Yes</td><td style="color:var(--green)">✓ Yes</td></tr>
+      <tr><td>Requires IV/Nonce</td><td>—</td><td>Random IV</td><td>Unique Nonce</td></tr>
+      <tr><td>Padding needed</td><td>PKCS#7</td><td>PKCS#7</td><td>✗ None</td></tr>
+      <tr><td>Parallel encryption</td><td>✓</td><td>✗</td><td>✓</td></tr>
+      <tr><td>Parallel decryption</td><td>✓</td><td>✓</td><td>✓</td></tr>
+      <tr><td>Random access</td><td>✓</td><td>✗</td><td>✓</td></tr>
+      <tr><td>Error propagation</td><td>Block-local</td><td>2 blocks</td><td>Bit-local</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ SOURCE -->
+<section id="source">
+  <h2>Go Source Code</h2>
+
+  <div class="warn">This implementation is for <strong>educational purposes only</strong>. It is not constant-time and has not been audited. For production use, use Go's <code>crypto/aes</code>.</div>
+
+  <h3>aes/aes.go — Core Cipher</h3>
+  <pre class="block"><code><span class="cmt">// Package aes implements AES (FIPS 197) from scratch.</span>
+<span class="kw">package</span> aes
+
+<span class="kw">import</span> <span class="str">"errors"</span>
+
+<span class="kw">const</span> BlockSize = <span class="num">16</span>
+
+<span class="kw">type</span> <span class="tp">Cipher</span> <span class="kw">struct</span> {
+    keys   [][][<span class="num">4</span>]<span class="tp">byte</span>  <span class="cmt">// [round][col][byte] — expanded round keys</span>
+    rounds <span class="tp">int</span>
+}
+
+<span class="kw">func</span> <span class="fn">NewCipher</span>(key []<span class="tp">byte</span>) (*<span class="tp">Cipher</span>, <span class="tp">error</span>) {
+    <span class="kw">switch</span> len(key) {
+    <span class="kw">case</span> <span class="num">16</span>, <span class="num">24</span>, <span class="num">32</span>:
+    <span class="kw">default</span>:
+        <span class="kw">return</span> nil, errors.<span class="fn">New</span>(<span class="str">"aes: key must be 16, 24, or 32 bytes"</span>)
+    }
+    c := &<span class="tp">Cipher</span>{}
+    c.keys = <span class="fn">keyExpansion</span>(key)
+    c.rounds = len(c.keys) - <span class="num">1</span>
+    <span class="kw">return</span> c, nil
+}
+
+<span class="cmt">// ── GF(2⁸) primitives ─────────────────────────────────────────</span>
+
+<span class="kw">func</span> <span class="fn">xtime</span>(b <span class="tp">byte</span>) <span class="tp">byte</span> {
+    <span class="kw">if</span> b&<span class="num">0x80</span> != <span class="num">0</span> { <span class="kw">return</span> (b &lt;&lt; <span class="num">1</span>) ^ <span class="num">0x1b</span> }
+    <span class="kw">return</span> b &lt;&lt; <span class="num">1</span>
+}
+
+<span class="kw">func</span> <span class="fn">gmul</span>(a, b <span class="tp">byte</span>) <span class="tp">byte</span> {
+    <span class="kw">var</span> p <span class="tp">byte</span>
+    <span class="kw">for</span> i := <span class="num">0</span>; i &lt; <span class="num">8</span>; i++ {
+        <span class="kw">if</span> b&<span class="num">1</span> != <span class="num">0</span> { p ^= a }
+        a = <span class="fn">xtime</span>(a)
+        b &gt;&gt;= <span class="num">1</span>
+    }
+    <span class="kw">return</span> p
+}
+
+<span class="cmt">// ── State helpers ──────────────────────────────────────────────</span>
+
+<span class="kw">type</span> <span class="tp">state</span> [<span class="num">4</span>][<span class="num">4</span>]<span class="tp">byte</span>   <span class="cmt">// state[row][col]</span>
+
+<span class="kw">func</span> <span class="fn">bytesToState</span>(b []<span class="tp">byte</span>) <span class="tp">state</span> {
+    <span class="kw">var</span> s <span class="tp">state</span>
+    <span class="kw">for</span> col := <span class="num">0</span>; col &lt; <span class="num">4</span>; col++ {
+        <span class="kw">for</span> row := <span class="num">0</span>; row &lt; <span class="num">4</span>; row++ {
+            s[row][col] = b[col*<span class="num">4</span>+row]
+        }
+    }
+    <span class="kw">return</span> s
+}
+
+<span class="cmt">// ── Round functions ────────────────────────────────────────────</span>
+
+<span class="kw">func</span> <span class="fn">subBytes</span>(s <span class="tp">state</span>) <span class="tp">state</span> {
+    <span class="kw">for</span> r := <span class="num">0</span>; r &lt; <span class="num">4</span>; r++ {
+        <span class="kw">for</span> c := <span class="num">0</span>; c &lt; <span class="num">4</span>; c++ { s[r][c] = sbox[s[r][c]] }
+    }
+    <span class="kw">return</span> s
+}
+
+<span class="kw">func</span> <span class="fn">shiftRows</span>(s <span class="tp">state</span>) <span class="tp">state</span> {
+    s[1][0],s[1][1],s[1][2],s[1][3] = s[1][1],s[1][2],s[1][3],s[1][0]
+    s[2][0],s[2][1],s[2][2],s[2][3] = s[2][2],s[2][3],s[2][0],s[2][1]
+    s[3][0],s[3][1],s[3][2],s[3][3] = s[3][3],s[3][0],s[3][1],s[3][2]
+    <span class="kw">return</span> s
+}
+
+<span class="kw">func</span> <span class="fn">mixColumns</span>(s <span class="tp">state</span>) <span class="tp">state</span> {
+    <span class="kw">for</span> col := <span class="num">0</span>; col &lt; <span class="num">4</span>; col++ {
+        a,b,c,d := s[0][col],s[1][col],s[2][col],s[3][col]
+        s[0][col] = <span class="fn">gmul</span>(<span class="num">2</span>,a) ^ <span class="fn">gmul</span>(<span class="num">3</span>,b) ^ c          ^ d
+        s[1][col] = a          ^ <span class="fn">gmul</span>(<span class="num">2</span>,b) ^ <span class="fn">gmul</span>(<span class="num">3</span>,c) ^ d
+        s[2][col] = a          ^ b          ^ <span class="fn">gmul</span>(<span class="num">2</span>,c) ^ <span class="fn">gmul</span>(<span class="num">3</span>,d)
+        s[3][col] = <span class="fn">gmul</span>(<span class="num">3</span>,a) ^ b          ^ c          ^ <span class="fn">gmul</span>(<span class="num">2</span>,d)
+    }
+    <span class="kw">return</span> s
+}
+
+<span class="kw">func</span> <span class="fn">addRoundKey</span>(s <span class="tp">state</span>, rk [][<span class="num">4</span>]<span class="tp">byte</span>) <span class="tp">state</span> {
+    <span class="kw">for</span> col := <span class="num">0</span>; col &lt; <span class="num">4</span>; col++ {
+        <span class="kw">for</span> row := <span class="num">0</span>; row &lt; <span class="num">4</span>; row++ { s[row][col] ^= rk[col][row] }
+    }
+    <span class="kw">return</span> s
+}
+
+<span class="cmt">// ── Encryption / Decryption ────────────────────────────────────</span>
+
+<span class="kw">func</span> <span class="fn">encryptState</span>(s <span class="tp">state</span>, keys [][][<span class="num">4</span>]<span class="tp">byte</span>, rounds <span class="tp">int</span>) <span class="tp">state</span> {
+    s = <span class="fn">addRoundKey</span>(s, keys[<span class="num">0</span>])
+    <span class="kw">for</span> r := <span class="num">1</span>; r &lt; rounds; r++ {
+        s = <span class="fn">subBytes</span>(s)
+        s = <span class="fn">shiftRows</span>(s)
+        s = <span class="fn">mixColumns</span>(s)
+        s = <span class="fn">addRoundKey</span>(s, keys[r])
+    }
+    s = <span class="fn">subBytes</span>(s)      <span class="cmt">// final round — no MixColumns</span>
+    s = <span class="fn">shiftRows</span>(s)
+    s = <span class="fn">addRoundKey</span>(s, keys[rounds])
+    <span class="kw">return</span> s
+}</code></pre>
+
+  <h3>aes/modes.go — ECB / CBC / CTR</h3>
+  <pre class="block"><code><span class="cmt">// CBCEncrypt — prepends IV to output, generates IV randomly</span>
+<span class="kw">func</span> (c *<span class="tp">Cipher</span>) <span class="fn">CBCEncrypt</span>(plaintext []<span class="tp">byte</span>) ([]<span class="tp">byte</span>, <span class="tp">error</span>) {
+    iv := make([]<span class="tp">byte</span>, BlockSize)
+    io.<span class="fn">ReadFull</span>(rand.Reader, iv)
+
+    padded := <span class="fn">pkcs7Pad</span>(plaintext, BlockSize)
+    out := make([]<span class="tp">byte</span>, BlockSize+len(padded))
+    copy(out, iv)
+
+    prev := iv
+    <span class="kw">for</span> i := <span class="num">0</span>; i &lt; len(padded); i += BlockSize {
+        block := out[BlockSize+i : BlockSize+i+BlockSize]
+        copy(block, padded[i:])
+        <span class="fn">xorBlock</span>(block, prev)  <span class="cmt">// P[i] ⊕ C[i-1]</span>
+        c.<span class="fn">Encrypt</span>(block)
+        prev = block
+    }
+    <span class="kw">return</span> out, nil
+}
+
+<span class="cmt">// CTRCrypt — same function for encrypt and decrypt</span>
+<span class="kw">func</span> (c *<span class="tp">Cipher</span>) <span class="fn">CTRCrypt</span>(data []<span class="tp">byte</span>, encrypt <span class="tp">bool</span>) ([]<span class="tp">byte</span>, <span class="tp">error</span>) {
+    <span class="cmt">// ... encrypt=true → generate nonce and prepend</span>
+    <span class="cmt">// ... encrypt=false → first 16 bytes are the nonce</span>
+    counter := make([]<span class="tp">byte</span>, BlockSize)
+    copy(counter, nonce)
+    <span class="kw">for</span> i := <span class="num">0</span>; i &lt; len(payload); i += BlockSize {
+        keystream := make([]<span class="tp">byte</span>, BlockSize)
+        copy(keystream, counter)
+        c.<span class="fn">Encrypt</span>(keystream)           <span class="cmt">// keystream = AES(K, Nonce‖i)</span>
+        <span class="cmt">// XOR keystream with payload block</span>
+        <span class="fn">incrementCounter</span>(counter)
+    }
+}</code></pre>
+
+  <h3>Running the Implementation</h3>
+  <pre class="block"><code><span class="cmt"># Run the demo (shows FIPS 197 vector + CBC + CTR + ECB weakness)</span>
+go run .
+
+<span class="cmt"># Run all tests (FIPS 197 known-answer tests + round-trip tests)</span>
+go test ./aes/ -v
+
+<span class="cmt"># Expected output of tests:</span>
+<span class="cmt">--- PASS: TestAES128BlockEncrypt  (FIPS 197 Appendix C.1)</span>
+<span class="cmt">--- PASS: TestAES192BlockEncrypt  (FIPS 197 Appendix C.2)</span>
+<span class="cmt">--- PASS: TestAES256BlockEncrypt  (FIPS 197 Appendix C.3)</span>
+<span class="cmt">--- PASS: TestAES128BlockDecrypt</span>
+<span class="cmt">--- PASS: TestRoundTrip           (ECB/CBC/CTR, all key sizes)</span>
+<span class="cmt">--- PASS: TestGmul                (GF(2⁸) multiplication)</span></code></pre>
+</section>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════
+// AES Implementation in JavaScript (mirrors Go code)
+// ═══════════════════════════════════════════════════
+
+const SBOX = [
+  0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
+  0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+  0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
+  0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+  0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
+  0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+  0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
+  0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+  0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
+  0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+  0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
+  0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+  0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
+  0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+  0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
+  0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16
+];
+
+const RCON = [0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36,0x6c];
+
+function xtime(b){ return (b&0x80) ? ((b<<1)^0x1b)&0xFF : (b<<1)&0xFF; }
+
+function gmul(a,b){
+  let p=0;
+  for(let i=0;i<8;i++){
+    if(b&1) p^=a;
+    a=xtime(a);
+    b>>=1;
+  }
+  return p;
+}
+
+function gmulTrace(a,b){
+  // Returns step-by-step trace
+  let p=0, aa=a, bb=b, steps=[];
+  for(let i=0;i<8;i++){
+    if(bb&1){
+      steps.push(`  bit ${i} of 0x${b.toString(16).padStart(2,'0')} is 1 → p ^= 0x${aa.toString(16).padStart(2,'0')}`);
+      p^=aa;
+    }
+    aa=xtime(aa);
+    bb>>=1;
+    if(bb===0) break;
+  }
+  return {result:p, steps};
+}
+
+// State: [row][col], column-major byte ordering
+function bytesToState(bytes){
+  const s = Array.from({length:4},()=>new Array(4).fill(0));
+  for(let col=0;col<4;col++) for(let row=0;row<4;row++) s[row][col]=bytes[col*4+row];
+  return s;
+}
+
+function stateToBytes(state){
+  const b=new Array(16);
+  for(let col=0;col<4;col++) for(let row=0;row<4;row++) b[col*4+row]=state[row][col];
+  return b;
+}
+
+function cloneState(s){ return s.map(r=>[...r]); }
+
+function subBytesOp(s){
+  return s.map(r=>r.map(b=>SBOX[b]));
+}
+
+function shiftRowsOp(s){
+  const n=[...s.map(r=>[...r])];
+  n[1]=[s[1][1],s[1][2],s[1][3],s[1][0]];
+  n[2]=[s[2][2],s[2][3],s[2][0],s[2][1]];
+  n[3]=[s[3][3],s[3][0],s[3][1],s[3][2]];
+  return n;
+}
+
+function mixColumnsOp(s){
+  const n=Array.from({length:4},()=>new Array(4).fill(0));
+  for(let col=0;col<4;col++){
+    const a=s[0][col],b=s[1][col],c=s[2][col],d=s[3][col];
+    n[0][col]=gmul(2,a)^gmul(3,b)^c^d;
+    n[1][col]=a^gmul(2,b)^gmul(3,c)^d;
+    n[2][col]=a^b^gmul(2,c)^gmul(3,d);
+    n[3][col]=gmul(3,a)^b^c^gmul(2,d);
+  }
+  return n;
+}
+
+function addRoundKeyOp(s,rk){
+  const n=cloneState(s);
+  for(let col=0;col<4;col++) for(let row=0;row<4;row++) n[row][col]^=rk[col][row];
+  return n;
+}
+
+function keyExpansion(keyBytes){
+  const Nk=keyBytes.length/4;
+  const Nr=Nk===4?10:Nk===6?12:14;
+  const total=4*(Nr+1);
+  const W=[];
+  for(let i=0;i<Nk;i++) W.push([keyBytes[4*i],keyBytes[4*i+1],keyBytes[4*i+2],keyBytes[4*i+3]]);
+  for(let i=Nk;i<total;i++){
+    let temp=[...W[i-1]];
+    if(i%Nk===0){
+      temp=[temp[1],temp[2],temp[3],temp[0]]; // RotWord
+      temp=temp.map(b=>SBOX[b]);              // SubWord
+      temp[0]^=RCON[i/Nk-1];                 // XOR Rcon
+    } else if(Nk>6 && i%Nk===4){
+      temp=temp.map(b=>SBOX[b]);
+    }
+    W.push(W[i-Nk].map((b,j)=>b^temp[j]));
+  }
+  const rks=[];
+  for(let r=0;r<=Nr;r++) rks.push(W.slice(r*4,r*4+4));
+  return rks;
+}
+
+function encryptTrace(ptBytes,keyBytes){
+  const rks=keyExpansion(keyBytes);
+  const Nr=rks.length-1;
+  const steps=[];
+  let s=bytesToState(ptBytes);
+
+  steps.push({op:'input',round:0,state:cloneState(s),rk:null,
+    title:'Plaintext loaded into state matrix',
+    desc:'The 16 plaintext bytes are arranged column-major into a 4×4 state matrix.'});
+
+  s=addRoundKeyOp(s,rks[0]);
+  steps.push({op:'addRoundKey',round:0,state:cloneState(s),rk:rks[0],
+    title:'AddRoundKey — Round 0 (Key Whitening)',
+    desc:'XOR every state byte with the initial round key. This \"whitens\" the plaintext before any round operations.'});
+
+  for(let r=1;r<=Nr;r++){
+    const before_sb=cloneState(s);
+    s=subBytesOp(s);
+    const ex_in=before_sb[0][0], ex_out=SBOX[ex_in];
+    steps.push({op:'subBytes',round:r,state:cloneState(s),rk:null,
+      title:`SubBytes — Round ${r}`,
+      desc:`Replace each byte with its S-box value.\nExample: S-box[0x${ex_in.toString(16).padStart(2,'0')}] = 0x${ex_out.toString(16).padStart(2,'0')} (row ${ex_in>>4}, col ${ex_in&0xf})`});
+
+    const before_sr=cloneState(s);
+    s=shiftRowsOp(s);
+    steps.push({op:'shiftRows',round:r,state:cloneState(s),rk:null,
+      title:`ShiftRows — Round ${r}`,
+      desc:`Row 0: no shift\nRow 1: rotate left 1\nRow 2: rotate left 2\nRow 3: rotate left 3`});
+
+    if(r<Nr){
+      const before_mc=cloneState(s);
+      s=mixColumnsOp(s);
+      const a=before_mc[0][0],b=before_mc[1][0],c=before_mc[2][0],d=before_mc[3][0];
+      const r0=gmul(2,a)^gmul(3,b)^c^d;
+      steps.push({op:'mixColumns',round:r,state:cloneState(s),rk:null,
+        title:`MixColumns — Round ${r}`,
+        desc:`Matrix multiply each column in GF(2⁸).\nCol 0: [${h(a)},${h(b)},${h(c)},${h(d)}]\n  s'[0] = gmul(2,${h(a)}) ^ gmul(3,${h(b)}) ^ ${h(c)} ^ ${h(d)} = ${h(r0)}`});
+    }
+
+    s=addRoundKeyOp(s,rks[r]);
+    const isFinal=(r===Nr);
+    steps.push({op:'addRoundKey',round:r,state:cloneState(s),rk:rks[r],
+      title:`AddRoundKey — Round ${r}${isFinal?' (Final)':''}`,
+      desc:`XOR state with round key ${r}.${isFinal?'\n\nThis is the ciphertext!':''}`});
+  }
+  return steps;
+}
+
+function h(n){ return '0x'+n.toString(16).padStart(2,'0'); }
+function hex2(n){ return n.toString(16).padStart(2,'0'); }
+
+function parseHex(str){
+  str=str.replace(/\s+/g,'');
+  if(str.length%2!==0) return null;
+  const b=[];
+  for(let i=0;i<str.length;i+=2) b.push(parseInt(str.substr(i,2),16));
+  return b.some(isNaN)?null:b;
+}
+
+// ═══════════════════════════════════════════════════
+// UI Helpers
+// ═══════════════════════════════════════════════════
+
+function makeMatrix(id, state, hiClass, compareState){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.innerHTML='';
+  for(let row=0;row<4;row++){
+    for(let col=0;col<4;col++){
+      const cell=document.createElement('div');
+      cell.className='cell';
+      cell.textContent=hex2(state[row][col]);
+      if(compareState && compareState[row][col]!==state[row][col]) cell.classList.add(hiClass||'hi-c');
+      el.appendChild(cell);
+    }
+  }
+}
+
+function makeMatrixRaw(state, cls){
+  const grid=document.createElement('div');
+  grid.className='matrix';
+  for(let row=0;row<4;row++){
+    for(let col=0;col<4;col++){
+      const cell=document.createElement('div');
+      cell.className='cell'+(cls?' '+cls:'');
+      cell.textContent=hex2(state[row][col]);
+      grid.appendChild(cell);
+    }
+  }
+  return grid;
+}
+
+// ═══════════════════════════════════════════════════
+// Section: State intro matrix
+// ═══════════════════════════════════════════════════
+(function(){
+  const bytes=[0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xaa,0xbb,0xcc,0xdd,0xee,0xff];
+  const s=bytesToState(bytes);
+  const el=document.getElementById('state-intro');
+  if(!el) return;
+  for(let row=0;row<4;row++){
+    for(let col=0;col<4;col++){
+      const cell=document.createElement('div');
+      cell.className='cell';
+      const byteIdx=col*4+row;
+      cell.textContent=hex2(s[row][col]);
+      cell.title=`Byte ${byteIdx} (0x${hex2(byteIdx*17)}) → State[${row}][${col}]`;
+      const hue=byteIdx*22.5;
+      cell.style.borderColor=`hsl(${hue},60%,55%)`;
+      el.appendChild(cell);
+    }
+  }
+})();
+
+// ═══════════════════════════════════════════════════
+// Section: SubBytes demo
+// ═══════════════════════════════════════════════════
+(function(){
+  // FIPS 197 AppB Round 1 before/after SubBytes
+  const beforeBytes=[0x19,0x3d,0xe3,0xbe,0xa0,0xf4,0xe2,0x2b,0x9a,0xc6,0x8d,0x2a,0xe9,0xf8,0x48,0x08];
+  const beforeSt=bytesToState(beforeBytes);
+  const afterSt=subBytesOp(beforeSt);
+
+  function build(id, state, compare){
+    const el=document.getElementById(id);
+    if(!el) return;
+    for(let row=0;row<4;row++){
+      for(let col=0;col<4;col++){
+        const cell=document.createElement('div');
+        cell.className='cell';
+        cell.textContent=hex2(state[row][col]);
+        if(compare) cell.classList.add('hi-c');
+        el.appendChild(cell);
+      }
+    }
+  }
+  build('ops-before-sb',beforeSt,false);
+  build('ops-after-sb',afterSt,true);
+})();
+
+// ═══════════════════════════════════════════════════
+// Section: ShiftRows demo
+// ═══════════════════════════════════════════════════
+(function(){
+  const el=document.getElementById('shiftrows-demo');
+  if(!el) return;
+  const letters=[['a','b','c','d'],['e','f','g','h'],['i','j','k','l'],['m','n','o','p']];
+  const after=[['a','b','c','d'],['f','g','h','e'],['k','l','i','j'],['p','m','n','o']];
+  const rowColors=['hi-c','hi-p','hi-g','hi-y'];
+  const wrap=document.createElement('div');
+  wrap.className='state-wrap';
+
+  ['Before','After'].forEach((label,idx)=>{
+    const src=idx===0?letters:after;
+    const d=document.createElement('div');
+    const lbl=document.createElement('div');
+    lbl.className='state-label'; lbl.textContent=label+' ShiftRows';
+    const m=document.createElement('div'); m.className='matrix';
+    for(let r=0;r<4;r++) for(let c=0;c<4;c++){
+      const cell=document.createElement('div');
+      cell.className='cell '+rowColors[r];
+      cell.textContent=src[r][c];
+      m.appendChild(cell);
+    }
+    d.appendChild(lbl); d.appendChild(m);
+    wrap.appendChild(d);
+  });
+
+  const note=document.createElement('div');
+  note.style.cssText='display:flex;flex-direction:column;justify-content:center;gap:.3rem;font-size:.82rem;color:var(--muted);font-family:monospace';
+  note.innerHTML='<div style="color:var(--cyan)">Row 0 (cyan): shift 0</div><div style="color:var(--purple)">Row 1 (purple): shift 1</div><div style="color:var(--green)">Row 2 (green): shift 2</div><div style="color:var(--yellow)">Row 3 (yellow): shift 3</div>';
+  wrap.appendChild(note);
+  el.appendChild(wrap);
+})();
+
+// ═══════════════════════════════════════════════════
+// Section: MixColumns worked example
+// ═══════════════════════════════════════════════════
+(function(){
+  const el=document.getElementById('mixcol-worked');
+  if(!el) return;
+  // FIPS 197 AppB Round 1: after ShiftRows col 0 = [d4, e0, b8, 1e]
+  const a=0xd4,b=0xe0,c=0xb8,d=0x1e;
+  const r0=gmul(2,a)^gmul(3,b)^c^d;
+  const r1=a^gmul(2,b)^gmul(3,c)^d;
+  const r2=a^b^gmul(2,c)^gmul(3,d);
+  const r3=gmul(3,a)^b^c^gmul(2,d);
+
+  el.innerHTML=`<div class="card" style="font-family:monospace;font-size:.82rem;line-height:2">
+<div>Input column: [<span style="color:var(--cyan)">${h(a)}</span>, <span style="color:var(--purple)">${h(b)}</span>, <span style="color:var(--green)">${h(c)}</span>, <span style="color:var(--yellow)">${h(d)}</span>]</div>
+<div style="margin:.5rem 0;border-top:1px solid var(--border)"></div>
+<div>s'[0] = gmul(2,${h(a)}) ^ gmul(3,${h(b)}) ^ ${h(c)} ^ ${h(d)}</div>
+<div>     = <span style="color:var(--muted)">${h(xtime(a))} ^ ${h(gmul(3,b))} ^ ${h(c)} ^ ${h(d)}</span> = <span style="color:var(--cyan);font-weight:700">${h(r0)}</span></div>
+<div>s'[1] = ${h(a)} ^ gmul(2,${h(b)}) ^ gmul(3,${h(c)}) ^ ${h(d)}</div>
+<div>     = <span style="color:var(--muted)">${h(a)} ^ ${h(xtime(b))} ^ ${h(gmul(3,c))} ^ ${h(d)}</span> = <span style="color:var(--purple);font-weight:700">${h(r1)}</span></div>
+<div>s'[2] = ${h(a)} ^ ${h(b)} ^ gmul(2,${h(c)}) ^ gmul(3,${h(d)})</div>
+<div>     = <span style="color:var(--muted)">${h(a)} ^ ${h(b)} ^ ${h(xtime(c))} ^ ${h(gmul(3,d))}</span> = <span style="color:var(--green);font-weight:700">${h(r2)}</span></div>
+<div>s'[3] = gmul(3,${h(a)}) ^ ${h(b)} ^ ${h(c)} ^ gmul(2,${h(d)})</div>
+<div>     = <span style="color:var(--muted)">${h(gmul(3,a))} ^ ${h(b)} ^ ${h(c)} ^ ${h(xtime(d))}</span> = <span style="color:var(--yellow);font-weight:700">${h(r3)}</span></div>
+<div style="margin:.5rem 0;border-top:1px solid var(--border)"></div>
+<div>Output column: [<span style="color:var(--cyan)">${h(r0)}</span>, <span style="color:var(--purple)">${h(r1)}</span>, <span style="color:var(--green)">${h(r2)}</span>, <span style="color:var(--yellow)">${h(r3)}</span>]</div>
+<div style="color:var(--muted);font-size:.75rem;margin-top:.5rem">FIPS 197 expected: [04, e0, 48, 28] ✓</div>
+</div>`;
+})();
+
+// ═══════════════════════════════════════════════════
+// GF Calculator
+// ═══════════════════════════════════════════════════
+function calcGmul(){
+  const aStr=document.getElementById('gf-a').value.trim();
+  const bStr=document.getElementById('gf-b').value.trim();
+  const a=parseInt(aStr,16), b=parseInt(bStr,16);
+  if(isNaN(a)||isNaN(b)||a>255||b>255){
+    document.getElementById('gf-out').textContent='Invalid input — enter two hex bytes (00–ff)';
+    return;
+  }
+  const {result,steps}=gmulTrace(a,b);
+  const bBin=b.toString(2).padStart(8,'0');
+  let out=`gmul(0x${a.toString(16).padStart(2,'0')}, 0x${b.toString(16).padStart(2,'0')})\n\n`;
+  out+=`b = 0x${b.toString(16).padStart(2,'0')} = ${bBin}₂\n`;
+  out+=`Russian Peasant algorithm (accumulate a·xⁱ for each set bit of b):\n\n`;
+  out+=steps.join('\n');
+  out+=`\n\nResult: 0x${result.toString(16).padStart(2,'0')}`;
+  document.getElementById('gf-out').textContent=out;
+}
+
+// Powers of 02 table
+(function(){
+  const el=document.getElementById('powers-table');
+  if(!el) return;
+  let html='<table><thead><tr><th>i</th><th>02ⁱ (hex)</th><th>02ⁱ (binary)</th><th>polynomial</th></tr></thead><tbody>';
+  let v=1;
+  for(let i=0;i<16;i++){
+    const bin=v.toString(2).padStart(8,'0');
+    const bits=[];
+    for(let k=7;k>=0;k--) if(v&(1<<k)) bits.push(`x${k===0?'⁰':k===1?'¹':k===2?'²':k===3?'³':k===4?'⁴':k===5?'⁵':k===6?'⁶':'⁷'}`);
+    const poly=bits.length?bits.join(' + '):'0';
+    html+=`<tr><td>${i===0?'0':i}</td><td style="color:var(--cyan)">${v.toString(16).padStart(2,'0')}</td><td style="color:var(--muted)">${bin}</td><td style="color:var(--purple);font-size:.78rem">${poly}</td></tr>`;
+    v=xtime(v);
+  }
+  html+='</tbody></table>';
+  el.innerHTML=html;
+})();
+
+// ═══════════════════════════════════════════════════
+// S-Box Grid
+// ═══════════════════════════════════════════════════
+(function(){
+  const el=document.getElementById('sbox-grid');
+  if(!el) return;
+
+  // Header row
+  const corner=document.createElement('div');
+  corner.className='sc sh'; corner.textContent='hi\\lo';
+  el.appendChild(corner);
+  for(let c=0;c<16;c++){
+    const h=document.createElement('div'); h.className='sc sh';
+    h.textContent=c.toString(16).toUpperCase(); el.appendChild(h);
+  }
+
+  // Data rows
+  for(let row=0;row<16;row++){
+    const rh=document.createElement('div'); rh.className='sc sh';
+    rh.textContent=row.toString(16).toUpperCase(); el.appendChild(rh);
+    for(let col=0;col<16;col++){
+      const byte=row*16+col;
+      const val=SBOX[byte];
+      const cell=document.createElement('div');
+      cell.className='sc';
+      cell.textContent=val.toString(16).padStart(2,'0');
+      cell.title=`Input: 0x${byte.toString(16).padStart(2,'0')} → Output: 0x${val.toString(16).padStart(2,'0')}`;
+      cell.addEventListener('click',()=>showSboxDetail(byte,val,cell));
+      el.appendChild(cell);
+    }
+  }
+})();
+
+function showSboxDetail(input, output, cell){
+  document.querySelectorAll('.sc.active').forEach(e=>e.classList.remove('active'));
+  cell.classList.add('active');
+
+  const det=document.getElementById('sbox-detail');
+  det.style.display='block';
+  const inBin=input.toString(2).padStart(8,'0');
+  const outBin=output.toString(2).padStart(8,'0');
+  det.innerHTML=`<strong>Input:</strong> 0x${input.toString(16).padStart(2,'0')} (${inBin}₂)
+&nbsp;→&nbsp; <strong>Output:</strong> <span style="color:var(--cyan)">0x${output.toString(16).padStart(2,'0')}</span> (${outBin}₂)<br>
+<span style="color:var(--muted);font-size:.82rem">
+Step 1: Find multiplicative inverse of 0x${input.toString(16).padStart(2,'0')} in GF(2⁸)${input===0?' → 0x00 (special case)':''}<br>
+Step 2: Apply affine transform (matrix M × inverse) ⊕ 0x63 → 0x${output.toString(16).padStart(2,'0')}
+</span>`;
+}
+
+// ═══════════════════════════════════════════════════
+// Key Schedule Renderer
+// ═══════════════════════════════════════════════════
+function renderKeySchedule(){
+  const keyHex=document.getElementById('ks-key-input').value;
+  const keyBytes=parseHex(keyHex);
+  if(!keyBytes||keyBytes.length!==16){ alert('Enter a valid 16-byte (32-char) hex key'); return; }
+
+  const Nk=4;
+  const W=[];
+  for(let i=0;i<Nk;i++) W.push({bytes:[keyBytes[4*i],keyBytes[4*i+1],keyBytes[4*i+2],keyBytes[4*i+3]],type:'orig'});
+
+  for(let i=Nk;i<44;i++){
+    let temp=[...W[i-1].bytes];
+    let wtype='xor';
+    if(i%Nk===0){
+      temp=[temp[1],temp[2],temp[3],temp[0]];
+      temp=temp.map(b=>SBOX[b]);
+      temp[0]^=RCON[i/Nk-1];
+      wtype='rot';
+    }
+    const newWord=W[i-Nk].bytes.map((b,j)=>b^temp[j]);
+    W.push({bytes:newWord,type:wtype});
+  }
+
+  const el=document.getElementById('ks-display');
+  let html='<div style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem">Words W[0..43] grouped into 11 round keys (RK0–RK10). Each row = one round key.</div>';
+
+  for(let r=0;r<=10;r++){
+    html+=`<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">`;
+    html+=`<span style="font-size:.7rem;color:var(--muted);width:30px;text-align:right">RK${r}</span>`;
+    for(let w=0;w<4;w++){
+      const word=W[r*4+w];
+      const cls=word.type==='orig'?'ks-orig':word.type==='rot'?'ks-rot':'ks-xor';
+      html+=`<div class="ks-cell ${cls}">${word.bytes.map(b=>hex2(b)).join(' ')}</div>`;
+    }
+    html+=`</div>`;
+  }
+  el.innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════
+// Cipher Trace Stepper
+// ═══════════════════════════════════════════════════
+let traceSteps=[];
+let traceIdx=0;
+
+function buildTrace(){
+  const keyHex=document.getElementById('trace-key').value;
+  const ptHex=document.getElementById('trace-pt').value;
+  const keyBytes=parseHex(keyHex);
+  const ptBytes=parseHex(ptHex);
+
+  if(!keyBytes||![16,24,32].includes(keyBytes.length)){alert('Key must be 16, 24, or 32 hex bytes');return;}
+  if(!ptBytes||ptBytes.length!==16){alert('Plaintext must be exactly 16 bytes (32 hex chars)');return;}
+
+  traceSteps=encryptTrace(ptBytes,keyBytes);
+  traceIdx=0;
+  renderTraceStep();
+}
+
+function renderTraceStep(){
+  if(!traceSteps.length) return;
+  const step=traceSteps[traceIdx];
+  const total=traceSteps.length;
+
+  document.getElementById('trace-prog').style.width=((traceIdx/(total-1))*100)+'%';
+  document.getElementById('step-counter').textContent=`Step ${traceIdx+1} / ${total}`;
+  document.getElementById('btn-back').disabled=(traceIdx===0);
+  document.getElementById('btn-fwd').disabled=(traceIdx===total-1);
+
+  document.getElementById('step-title').textContent=step.title;
+  document.getElementById('step-math').textContent=step.desc;
+
+  const wrap=document.getElementById('trace-states');
+  wrap.innerHTML='';
+
+  // Previous state
+  if(traceIdx>0){
+    const prev=traceSteps[traceIdx-1];
+    const d=document.createElement('div');
+    const lbl=document.createElement('div'); lbl.className='state-label'; lbl.textContent='Before';
+    const m=buildStateMatrix(prev.state, null, '');
+    d.appendChild(lbl); d.appendChild(m); wrap.appendChild(d);
+  }
+
+  // Current state
+  {
+    const d=document.createElement('div');
+    const lbl=document.createElement('div'); lbl.className='state-label';
+    lbl.textContent=step.op==='addRoundKey'?'After (with key XOR)':'After';
+    const prevSt=traceIdx>0?traceSteps[traceIdx-1].state:null;
+    const m=buildStateMatrix(step.state, prevSt, 'hi-c');
+    d.appendChild(lbl); d.appendChild(m); wrap.appendChild(d);
+  }
+
+  // Round key
+  if(step.rk){
+    const rkState=Array.from({length:4},(_,row)=>Array.from({length:4},(_,col)=>step.rk[col][row]));
+    const d=document.createElement('div');
+    const lbl=document.createElement('div'); lbl.className='state-label'; lbl.textContent='Round Key';
+    const m=buildStateMatrix(rkState, null, 'hi-p');
+    d.appendChild(lbl); d.appendChild(m); wrap.appendChild(d);
+  }
+
+  // Ciphertext bytes display at end
+  if(traceIdx===traceSteps.length-1){
+    const d=document.createElement('div');
+    d.style.cssText='display:flex;flex-direction:column;justify-content:center;gap:.4rem;font-family:monospace;font-size:.85rem';
+    const bytes=stateToBytes(step.state);
+    d.innerHTML=`<div style="color:var(--green);font-weight:700">Ciphertext:</div><div style="color:var(--cyan);word-break:break-all">${bytes.map(b=>hex2(b)).join('')}</div>`;
+    wrap.appendChild(d);
+  }
+}
+
+function buildStateMatrix(state, compareState, hiClass){
+  const grid=document.createElement('div');
+  grid.className='matrix';
+  for(let row=0;row<4;row++){
+    for(let col=0;col<4;col++){
+      const cell=document.createElement('div');
+      cell.className='cell';
+      cell.textContent=hex2(state[row][col]);
+      if(compareState && compareState[row][col]!==state[row][col]) cell.classList.add(hiClass);
+      grid.appendChild(cell);
+    }
+  }
+  return grid;
+}
+
+function stepFwd(){ if(traceIdx<traceSteps.length-1){ traceIdx++; renderTraceStep(); } }
+function stepBack(){ if(traceIdx>0){ traceIdx--; renderTraceStep(); } }
+function stepToEnd(){ traceIdx=traceSteps.length-1; renderTraceStep(); }
+function resetTrace(){ traceIdx=0; if(traceSteps.length) renderTraceStep(); }
+
+// ═══════════════════════════════════════════════════
+// Auto-init
+// ═══════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded',()=>{
+  renderKeySchedule();
+  buildTrace();
+});
+</script>
+</body>
+</html>
